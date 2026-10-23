@@ -13,14 +13,15 @@ Report to the user in the language they use.
    ```
    Add `--live` when the user asks to test the models, or when all basic checks pass but workers still fail. It sends each worker model `Reply with exactly: OK`, up to 2 minutes per model.
 2. Report the results: FAIL items first, then WARN, each with the script's `→` fix hint. If everything passes, say in one sentence that `/orca-omp` is ready.
-3. If a fix means changing config or starting a service (for example `orca open`, or editing `~/.omp/agent/models.yml`), explain what you will do and ask first. For interactive commands such as `omp login`, ask the user to run them with `! <command>`.
+3. To change models or other settings, use `/orca-omp-setup`. If a fix means changing config or starting a service (for example `orca open`, or editing `~/.omp/agent/models.yml`), explain what you will do and ask first. For interactive commands such as `omp login`, ask the user to run them with `! <command>`.
 4. After fixing, rerun the script to confirm.
 
 ## What it checks
 | Section | Checks |
 |---|---|
+| Settings | `ORCA_OMP_MODEL` is set (FAIL if not); `ORCA_OMP_LOCAL_MODEL` is set (WARN if not), via `/orca-omp-setup` |
 | Commands | `claude`, `orca`, `omp`, `git`, `python3`, `curl` are on PATH |
 | Orca | runtime is ready; agent id `omp` is accepted; the orchestration guide is available; whether we are inside an Orca terminal (otherwise the coordinator is not shown in Orca) |
 | omp models | `ORCA_OMP_MODEL` and `ORCA_OMP_LOCAL_MODEL` both appear in `omp models` |
 | Local model stays local | the local model provider's `baseUrl` points at localhost and the server responds |
-| Skills installed | both skills are in `~/.claude/skills/` |
+| Skills installed | all three skills are in `~/.claude/skills/` |

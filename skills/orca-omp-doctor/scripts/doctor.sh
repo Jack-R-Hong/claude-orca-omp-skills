@@ -5,9 +5,14 @@
 
 set -u
 
-MODEL="${ORCA_OMP_MODEL:-strata/qwen3.8-flash-next-coder-iq1_m}"
-LOCAL_MODEL="${ORCA_OMP_LOCAL_MODEL:-omlx/Qwen3.8-27B-MLX-4bit}"
+CONFIG_SH="$HOME/.claude/skills/orca-omp-setup/scripts/config.sh"
 OMP_MODELS_YML="${OMP_MODELS_YML:-$HOME/.omp/agent/models.yml}"
+MODEL=""
+LOCAL_MODEL=""
+if [[ -f "$CONFIG_SH" ]]; then
+  MODEL="$(bash "$CONFIG_SH" get ORCA_OMP_MODEL)"
+  LOCAL_MODEL="$(bash "$CONFIG_SH" get ORCA_OMP_LOCAL_MODEL)"
+fi
 LIVE=0
 [[ "${1:-}" == "--live" ]] && LIVE=1
 
@@ -64,10 +69,25 @@ if command -v orca >/dev/null 2>&1; then
   fi
 fi
 
+echo "== Settings"
+if [[ ! -f "$CONFIG_SH" ]]; then
+  fail "orca-omp-setup skill not installed"
+  hint "run install.sh"
+else
+  if [[ -n "$MODEL" ]]; then pass "ORCA_OMP_MODEL=$MODEL"; else fail "ORCA_OMP_MODEL is unset"; hint "run /orca-omp-setup"; fi
+  if [[ -n "$LOCAL_MODEL" ]]; then
+    pass "ORCA_OMP_LOCAL_MODEL=$LOCAL_MODEL"
+  else
+    warn "ORCA_OMP_LOCAL_MODEL is unset; sensitive tasks will not be dispatched"
+    hint "run /orca-omp-setup"
+  fi
+fi
+
 echo "== omp models"
 if command -v omp >/dev/null 2>&1; then
   selectors=$(omp models --json 2>/dev/null | json_get "'\n'.join(m.get('selector','') for m in d['models'])")
   for sel in "$MODEL" "$LOCAL_MODEL"; do
+    [[ -z "$sel" ]] && continue
     if grep -qxF "$sel" <<<"$selectors"; then
       pass "omp knows $sel"
     else
@@ -78,54 +98,41 @@ if command -v omp >/dev/null 2>&1; then
 fi
 
 echo "== Local model stays local"
-provider="${LOCAL_MODEL%%/*}"
-base_url=$(python3 -I - "$OMP_MODELS_YML" "$provider" <<'PY'
-import re, sys
-path, want = sys.argv[1], sys.argv[2]
-try:
-    lines = open(path).read().splitlines()
-except OSError:
-    sys.exit()
-cur = None
-for line in lines:
-    m = re.match(r"^  ([^\s#][^:]*):\s*$", line)
-    if m:
-        cur = m.group(1).strip()
-        continue
-    m = re.match(r"^    baseUrl:\s*(\S+)", line)
-    if m and cur == want:
-        print(m.group(1).strip("'\""))
-        break
-PY
-)
-if [[ -z "$base_url" ]]; then
-  fail "no baseUrl for provider '$provider' in $OMP_MODELS_YML"
+if [[ -z "$LOCAL_MODEL" ]]; then
+  warn "skipped: no local model configured"
 else
-  host=$(python3 -I -c 'import sys,urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$base_url")
-  case "$host" in
-    localhost | 127.0.0.1 | ::1) pass "$provider points at $host" ;;
-    *)
-      fail "$provider points at $host, not this machine"
-      hint "ORCA_OMP_LOCAL_MODEL must be served locally; sensitive data would leave the machine"
-      ;;
-  esac
-  code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' "${base_url%/}/models")
-  if [[ "$code" != "000" ]]; then
-    pass "$provider server responds (HTTP $code)"
+  provider="${LOCAL_MODEL%%/*}"
+  base_url="$(bash "$CONFIG_SH" base-url "$provider")"
+  if [[ -z "$base_url" ]]; then
+    fail "no baseUrl for provider '$provider' in $OMP_MODELS_YML"
   else
-    fail "$provider server at $base_url is not reachable"
-    hint "start the local model server"
+    host=$(python3 -I -c 'import sys,urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$base_url")
+    case "$host" in
+      localhost | 127.0.0.1 | ::1) pass "$provider points at $host" ;;
+      *)
+        fail "$provider points at $host, not this machine"
+        hint "ORCA_OMP_LOCAL_MODEL must be served locally; sensitive data would leave the machine"
+        ;;
+    esac
+    code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' "${base_url%/}/models")
+    if [[ "$code" != "000" ]]; then
+      pass "$provider server responds (HTTP $code)"
+    else
+      fail "$provider server at $base_url is not reachable"
+      hint "start the local model server"
+    fi
   fi
 fi
 
 echo "== Skills installed"
-for s in orca-omp orca-omp-doctor; do
+for s in orca-omp orca-omp-doctor orca-omp-setup; do
   if [[ -f "$HOME/.claude/skills/$s/SKILL.md" ]]; then pass "$s"; else warn "$s not in ~/.claude/skills"; hint "run install.sh"; fi
 done
 
 if [[ $LIVE -eq 1 ]]; then
   echo "== Live prompt (up to 2 min per model)"
   for sel in "$MODEL" "$LOCAL_MODEL"; do
+    [[ -z "$sel" ]] && continue
     out=$(cd "${TMPDIR:-/tmp}" && omp -p --model "$sel" --no-session --max-time 2m "Reply with exactly: OK" 2>&1 | tail -3)
     if grep -q 'OK' <<<"$out"; then pass "$sel answered"; else fail "$sel did not answer OK"; hint "$(tr '\n' ' ' <<<"$out" | cut -c1-160)"; fi
   done

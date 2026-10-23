@@ -1,6 +1,6 @@
 ---
 name: orca-omp
-description: Orchestration mode. Claude Code (Opus) acts as the Orca orchestration coordinator, breaks work into tasks, dispatches coding subtasks to oh-my-pi (omp) workers, routes sensitive tasks to a local model, and verifies every result. Use when the user says /orca-omp, "use omp", "dispatch to omp" (「用 omp 做」, 「派給 omp」). If setup fails, run /orca-omp-doctor first.
+description: Orchestration mode. Claude Code (Opus) acts as the Orca orchestration coordinator, breaks work into tasks, dispatches coding subtasks to oh-my-pi (omp) workers, routes sensitive tasks to a local model, and verifies every result. Use when the user says /orca-omp, "use omp", "dispatch to omp" (「用 omp 做」, 「派給 omp」). If setup fails, run /orca-omp-doctor; to change models or settings, /orca-omp-setup.
 ---
 
 # Opus orchestration + Orca + omp workers
@@ -10,15 +10,21 @@ You (Opus) are the coordinator of an Orca orchestration run: read the code, spli
 Report to the user in the language they use.
 
 ## Configuration
-Worker models come from environment variables, with defaults when unset. Values are omp `provider/model` selectors (see `omp models`):
+Settings are personal and managed by `/orca-omp-setup`. Before starting, read them:
 
-| Variable | Default | Used for |
+```bash
+bash ~/.claude/skills/orca-omp-setup/scripts/config.sh show
+```
+
+| Key | Placeholder below | Meaning |
 |---|---|---|
-| `ORCA_OMP_MODEL` | `strata/qwen3.8-flash-next-coder-iq1_m` | General tasks |
-| `ORCA_OMP_LOCAL_MODEL` | `omlx/Qwen3.8-27B-MLX-4bit` | Sensitive tasks; must be served on this machine |
-| `ORCA_OMP_KEEP_WORKERS` | `1` | `1`: keep settled worker terminals open in Orca (`worker-retain`) so the user can inspect omp's context. `0`: release them. |
+| `ORCA_OMP_MODEL` | `<MODEL>` | omp selector for general tasks |
+| `ORCA_OMP_LOCAL_MODEL` | `<LOCAL_MODEL>` | omp selector for sensitive tasks, served on this machine |
+| `ORCA_OMP_KEEP_WORKERS` | `<KEEP>` | `1`: keep settled worker terminals open in Orca (`worker-retain`) so the user can inspect omp's context. `0`: release them. |
+| `ORCA_OMP_WAIT_MINUTES` | `<WAIT>` | length of each `check --wait` |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `<MAX_LOCAL>` | max local-model workers at once |
 
-Before starting, run `echo "${ORCA_OMP_MODEL:-strata/qwen3.8-flash-next-coder-iq1_m} ${ORCA_OMP_LOCAL_MODEL:-omlx/Qwen3.8-27B-MLX-4bit} ${ORCA_OMP_KEEP_WORKERS:-1}"` to get the actual values. `<MODEL>`, `<LOCAL_MODEL>` and `<KEEP>` below refer to them.
+If `ORCA_OMP_MODEL` is unset, stop and run `/orca-omp-setup`. If only `ORCA_OMP_LOCAL_MODEL` is unset, continue but do not dispatch sensitive tasks; tell the user which tasks were held back.
 
 ## 0. Prerequisites
 On first use, or if any step below fails, run `/orca-omp-doctor` first.
@@ -48,7 +54,7 @@ Pick a route per task by sensitivity, and state which route was used in the repo
 | General (default) | `<MODEL>` | Ordinary coding tasks. |
 | Local | `<LOCAL_MODEL>` | Data must not leave this machine: tasks touching `.env`, keys, credentials, `~/.ssh`, personal data, unreleased code or customer data, or reading/writing local system settings or keychain scripts. |
 
-- The local model shares this machine's memory and GPU with Orca and Claude Code. Run at most 1–2 local workers at a time.
+- The local model shares this machine's memory and GPU with Orca and Claude Code. Run at most `<MAX_LOCAL>` local workers at a time.
 - When unsure whether a task is sensitive, use the local route.
 - The local route only keeps data on the machine. It does not make actions safer: the worker can still run commands here. Sensitive specs must list the allowed commands and files, forbid deletions, `git push`, and outbound network requests, and forbid putting secrets in the `worker_done` summary or logs.
 - Verify sensitive tasks by reviewing the diff locally. Do not paste secrets anywhere except back to the user.
@@ -68,9 +74,9 @@ orca orchestration worker-start --spec "<spec>" --task-title "<short title>" \
 
 ## 4. Wait and verify
 ```bash
-orca orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
+orca orchestration check --wait --types "worker_done,escalation,question" --timeout-ms <WAIT × 60000> --json
 ```
-- Prompt cache: assume a 1-hour cache TTL (it may drop to 5 minutes when usage goes into overage). Keep each `check --wait` timeout at 15 minutes (50 at most) so every wake-up lands inside the TTL and cheaply refreshes the cache. Never wait more than 1 hour in a single call.
+- Prompt cache: assume a 1-hour cache TTL (it may drop to 5 minutes when usage goes into overage). Use `<WAIT>` minutes per `check --wait` (the setup helper caps it at 50) so every wake-up lands inside the TTL and cheaply refreshes the cache. Never wait more than 1 hour in a single call.
 - Keep the coordinator context lean so a cache rebuild stays cheap: read only the parts of worker output you need (`tail`, `jq`), never pull whole terminal output or large diffs into the conversation, and condense finished tasks to a few lines before a long wait.
 - On `question`, answer with `reply`. On `worker_done`:
   - Review with `orca file diff` or `git diff` in the worktree and run the acceptance command yourself. Do not trust the worker's summary alone.

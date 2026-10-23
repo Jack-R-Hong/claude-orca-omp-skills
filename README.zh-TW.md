@@ -8,6 +8,7 @@ Claude Code skills：讓 Claude Code（Opus）當 [Orca](https://github.com/stab
 |---|---|---|
 | `orca-omp` | `/orca-omp <任務>` | 拆解任務 → 派發 omp worker → 等待 → 驗收 → 合併 |
 | `orca-omp-doctor` | `/orca-omp-doctor` | 檢查整套設定是否可用 |
+| `orca-omp-setup` | `/orca-omp-setup` | 查看與修改個人設定（模型、上限） |
 
 ## 流程
 
@@ -33,17 +34,28 @@ cd claude-orca-omp-skills
 ./install.sh            # 把 skills/* symlink 到 ~/.claude/skills/
 ```
 
-設定 worker 模型（omp 的 `provider/model` selector，可用 `omp models` 查）：
+接著在 Claude Code 裡執行 `/orca-omp-setup`。它會列出你的 omp 模型（標示本機或遠端），詢問要用哪個，並儲存你的選擇。
+
+### 設定
+
+設定屬於個人，存在 repo 以外的 `~/.config/orca-omp/config.env`（可用 `ORCA_OMP_CONFIG` 改路徑）。用 `/orca-omp-setup` 修改，或直接：
 
 ```bash
-export ORCA_OMP_MODEL="strata/qwen3.8-flash-next-coder-iq1_m"   # 一般任務
-export ORCA_OMP_LOCAL_MODEL="omlx/Qwen3.8-27B-MLX-4bit"         # 機密任務，必須在本機
-export ORCA_OMP_KEEP_WORKERS=1                                 # 任務完成後保留 Orca 裡的 worker 終端機（0 = 關閉）
+C=~/.claude/skills/orca-omp-setup/scripts/config.sh
+bash $C show                                          # 目前的值與來源
+bash $C models                                        # omp 模型，標示 local / remote
+bash $C set ORCA_OMP_MODEL <provider/model>           # 寫入前會先驗證
 ```
 
-未設定時使用上面的預設值（作者自己的環境），請改成你的模型。
+| 設定 | 預設 | 用途 |
+|---|---|---|
+| `ORCA_OMP_MODEL` | 無 | 一般任務用的 omp 模型 |
+| `ORCA_OMP_LOCAL_MODEL` | 無 | 機密任務用的 omp 模型，必須在 localhost |
+| `ORCA_OMP_KEEP_WORKERS` | `1` | 任務完成後保留 Orca 裡的 worker 終端機（`0` 為關閉） |
+| `ORCA_OMP_WAIT_MINUTES` | `15` | 每次等待 worker 的分鐘數，1–50 |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | 同時執行的本機模型 worker 上限 |
 
-把 `export` 寫進 `~/.zshrc`（或你的 shell 設定檔）。Orca 的終端機會啟動 login shell，這樣才讀得到。
+同名的環境變數會覆蓋設定檔。設定檔只會被當成 `KEY=VALUE` 文字解析，不會被執行。
 
 ## 從 Orca 裡啟動 Claude Code 當編排者
 

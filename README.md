@@ -8,6 +8,7 @@ Claude Code skills that make Claude Code (Opus) the coordinator of an [Orca](htt
 |---|---|---|
 | `orca-omp` | `/orca-omp <task>` | Decompose → dispatch omp workers → wait → verify → merge |
 | `orca-omp-doctor` | `/orca-omp-doctor` | Check that the whole setup works |
+| `orca-omp-setup` | `/orca-omp-setup` | View and change your personal settings (models, limits) |
 
 ## How it works
 
@@ -33,17 +34,28 @@ cd claude-orca-omp-skills
 ./install.sh            # symlinks skills/* into ~/.claude/skills/
 ```
 
-Set the worker models (omp `provider/model` selectors; list them with `omp models`):
+Then, in Claude Code, run `/orca-omp-setup`. It lists your omp models (marked local or remote), asks which to use, and saves your choices.
+
+### Settings
+
+Settings are personal and live outside the repo, in `~/.config/orca-omp/config.env` (override the path with `ORCA_OMP_CONFIG`). Change them with `/orca-omp-setup`, or directly:
 
 ```bash
-export ORCA_OMP_MODEL="strata/qwen3.8-flash-next-coder-iq1_m"   # general tasks
-export ORCA_OMP_LOCAL_MODEL="omlx/Qwen3.8-27B-MLX-4bit"         # sensitive tasks, must be local
-export ORCA_OMP_KEEP_WORKERS=1                                 # keep finished worker terminals open in Orca (0 = close them)
+C=~/.claude/skills/orca-omp-setup/scripts/config.sh
+bash $C show                                          # current values and their source
+bash $C models                                        # omp models, marked local / remote
+bash $C set ORCA_OMP_MODEL <provider/model>           # validated before writing
 ```
 
-The values above are the defaults when unset (the author's own setup). Replace them with your models.
+| Key | Default | Meaning |
+|---|---|---|
+| `ORCA_OMP_MODEL` | none | omp model for general tasks |
+| `ORCA_OMP_LOCAL_MODEL` | none | omp model for sensitive tasks; must be served on localhost |
+| `ORCA_OMP_KEEP_WORKERS` | `1` | keep finished worker terminals open in Orca (`0` closes them) |
+| `ORCA_OMP_WAIT_MINUTES` | `15` | length of each wait for workers, 1–50 |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | max local-model workers at once |
 
-Put the `export` lines in `~/.zshrc` (or your shell profile). Orca terminals start a login shell, so that is where they are picked up.
+An environment variable with the same name overrides the file. The file is parsed as plain `KEY=VALUE` lines and never executed.
 
 ## Start Claude Code as the coordinator from inside Orca
 
