@@ -16,8 +16,9 @@ Worker models come from environment variables, with defaults when unset. Values 
 |---|---|---|
 | `ORCA_OMP_MODEL` | `strata/qwen3.8-flash-next-coder-iq1_m` | General tasks |
 | `ORCA_OMP_LOCAL_MODEL` | `omlx/Qwen3.8-27B-MLX-4bit` | Sensitive tasks; must be served on this machine |
+| `ORCA_OMP_KEEP_WORKERS` | `1` | `1`: keep settled worker terminals open in Orca (`worker-retain`) so the user can inspect omp's context. `0`: release them. |
 
-Before starting, run `echo "${ORCA_OMP_MODEL:-strata/qwen3.8-flash-next-coder-iq1_m} ${ORCA_OMP_LOCAL_MODEL:-omlx/Qwen3.8-27B-MLX-4bit}"` to get the actual values. `<MODEL>` and `<LOCAL_MODEL>` below refer to them.
+Before starting, run `echo "${ORCA_OMP_MODEL:-strata/qwen3.8-flash-next-coder-iq1_m} ${ORCA_OMP_LOCAL_MODEL:-omlx/Qwen3.8-27B-MLX-4bit} ${ORCA_OMP_KEEP_WORKERS:-1}"` to get the actual values. `<MODEL>`, `<LOCAL_MODEL>` and `<KEEP>` below refer to them.
 
 ## 0. Prerequisites
 On first use, or if any step below fails, run `/orca-omp-doctor` first.
@@ -60,6 +61,7 @@ orca orchestration worker-start --spec "<spec>" --task-title "<short title>" \
   --worktree new-child --agent omp \
   --model <MODEL or LOCAL_MODEL> --json
 ```
+- Each worker runs in its own child worktree, so in Orca its terminal sits under that worktree in the sidebar, not under the coordinator's repo. After starting the first worker, bring it to the front with `orca terminal switch --terminal <worker handle>` (the `terminal` effect in the `worker-start` result) and tell the user which worktree each worker is in.
 - For ordered work, use `task-create --deps` + `worker-start --task <id>`; keep dependency chains at most 3 deep.
 - OMP does not support `--effort`; do not pass it.
 - If `worker-start` fails, do not simply rerun it. Read `failedStage` and load the recovery reference per the Orca rules.
@@ -72,11 +74,14 @@ orca orchestration check --wait --types "worker_done,escalation,question" --time
 - Keep the coordinator context lean so a cache rebuild stays cheap: read only the parts of worker output you need (`tail`, `jq`), never pull whole terminal output or large diffs into the conversation, and condense finished tasks to a few lines before a long wait.
 - On `question`, answer with `reply`. On `worker_done`:
   - Review with `orca file diff` or `git diff` in the worktree and run the acceptance command yourself. Do not trust the worker's summary alone.
-  - Pass: merge into the main branch, then `worker-release`.
+  - Pass: merge into the main branch. Then, if `<KEEP>` is `1`, `worker-retain --dispatch <dispatch_id>` so the omp terminal stays open in Orca; otherwise `worker-release` (which closes the terminal).
   - Fail: re-dispatch once in the same terminal with the concrete error and how to fix it. Take over only if it fails again.
 - Weak models may forget `worker_done`. After three consecutive empty waits, inspect with `worker-list` per the Orca rules; `orca terminal read` shows worker output. Do not stop or abandon a worker without positive proof.
 - Before finishing, confirm `worker-list --run <run_id> --terminal-state reclaimable --json` is empty.
 
 ## 5. Report
 For each task, list: outcome, evidence (test output / diff summary), worktree path, unresolved issues.
-The user can watch every worker's terminal in the Orca window. To see an omp worker's full context, run `/dump` in that worker's terminal, or `omp render <session-id> --plain`.
+The user can watch every worker's terminal in the Orca window, under each worker's worktree. To see an omp worker's full context, run `/dump` in that worker's terminal. If the terminal was already released, reopen the session in Orca:
+`orca terminal create --worktree path:<worker worktree> --title "omp session" --command "omp -r <omp session id>" --focus --json`
+(find the session id with `grep -l -r <worktree path> ~/.omp/agent/sessions | xargs ls -t | head -1`), or print it with `omp render <session-id> --plain`.
+Retained terminals stay until the user is done; when they ask to clean up, `worker-release` each retained dispatch.

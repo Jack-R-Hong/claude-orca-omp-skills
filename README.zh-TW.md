@@ -38,6 +38,7 @@ cd claude-orca-omp-skills
 ```bash
 export ORCA_OMP_MODEL="strata/qwen3.8-flash-next-coder-iq1_m"   # 一般任務
 export ORCA_OMP_LOCAL_MODEL="omlx/Qwen3.8-27B-MLX-4bit"         # 機密任務，必須在本機
+export ORCA_OMP_KEEP_WORKERS=1                                 # 任務完成後保留 Orca 裡的 worker 終端機（0 = 關閉）
 ```
 
 未設定時使用上面的預設值（作者自己的環境），請改成你的模型。
@@ -47,6 +48,8 @@ export ORCA_OMP_LOCAL_MODEL="omlx/Qwen3.8-27B-MLX-4bit"         # 機密任務�
 1. 檢查設定：`/orca-omp-doctor`（實測模型加上「用 --live」）。
 2. 在 **Orca 的終端機裡**啟動 Claude Code，編排過程和所有 worker 才會顯示在同一個視窗。
 3. `/orca-omp <任務描述>`
+
+每個 worker 的 omp 終端機會出現在 Orca 側邊欄中它自己的子 worktree 底下。`ORCA_OMP_KEEP_WORKERS=1`（預設）時，任務完成後終端機會保留，可以在那裡輸入 `/dump` 查看 omp 送給模型的完整 context。
 
 不在 Orca 終端機裡也能跑：skill 會自己建立一個 coordinator 終端機當身份，但 Opus 的對話不會顯示在 Orca 中。
 

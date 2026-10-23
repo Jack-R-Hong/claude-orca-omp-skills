@@ -38,6 +38,7 @@ Set the worker models (omp `provider/model` selectors; list them with `omp model
 ```bash
 export ORCA_OMP_MODEL="strata/qwen3.8-flash-next-coder-iq1_m"   # general tasks
 export ORCA_OMP_LOCAL_MODEL="omlx/Qwen3.8-27B-MLX-4bit"         # sensitive tasks, must be local
+export ORCA_OMP_KEEP_WORKERS=1                                 # keep finished worker terminals open in Orca (0 = close them)
 ```
 
 The values above are the defaults when unset (the author's own setup). Replace them with your models.
@@ -47,6 +48,8 @@ The values above are the defaults when unset (the author's own setup). Replace t
 1. Check the setup: `/orca-omp-doctor` (ask it to use `--live` to test the models).
 2. Start Claude Code **inside an Orca terminal**, so the coordinator and every worker appear in one window.
 3. `/orca-omp <task description>`
+
+Each worker's omp terminal appears in Orca under its own child worktree in the sidebar. With `ORCA_OMP_KEEP_WORKERS=1` (default) it stays open after the task finishes, so you can run `/dump` there to see the full context omp sent to the model.
 
 It also works outside an Orca terminal: the skill creates a coordinator terminal to act as its identity, but the Opus conversation will not appear in Orca.
 
