@@ -2,6 +2,8 @@
 
 [English](README.md) | **繁體中文**
 
+> **AI agent：** 要替使用者安裝這些 skill，請照 [Install guide for AI agents](#install-guide-for-ai-agents) 的步驟。
+
 Claude Code skills：讓 Claude Code（Opus）當 [Orca](https://github.com/stablyai/orca) orchestration 的 coordinator，把 coding 子任務派給 [oh-my-pi](https://github.com/can1357/oh-my-pi)（`omp`）worker 執行，最後由 Opus 驗收。機密任務會改派給跑在本機的模型，資料不離開這台機器。
 
 | Skill | 指令 | 用途 |
@@ -121,6 +123,80 @@ claude --resume <session-id>
 - 本機路線只保證資料不外流，不代表動作比較安全：worker 一樣能在本機執行指令。機密任務的 spec 會明列允許的檔案與指令。
 - 小型或高度量化的模型可能忘記送 `worker_done`，skill 會在連續三次空等後改用 `worker-list` / `terminal read` 檢查。
 - 每次等待維持 15 分鐘以內，讓 Claude Code 的 prompt cache 不會失效。
+
+## Install guide for AI agents
+
+> 這一節是寫給 AI agent（例如 Claude Code）讀的安裝步驟，刻意保留英文。你可以直接對 agent 說：「照 README 的 Install guide for AI agents 幫我安裝」。
+
+<!-- This section is written for an AI coding agent (for example Claude Code) asked to install these skills for a user. Follow it in order. -->
+
+You are installing three Claude Code skills (`orca-omp`, `orca-omp-doctor`, `orca-omp-setup`) on the user's machine. Work through the steps in order, run each command yourself, and report what happened at the end.
+
+### Rules
+- Do not install, upgrade, or log in to any application (Claude Code, Orca, omp) without asking the user first. Interactive logins such as `omp login` must be run by the user (in Claude Code: `! omp login`).
+- Do not edit `~/.omp/agent/models.yml`, API keys, or any credential file. Never print API keys or header values.
+- Do not choose worker models on the user's behalf. Ask them.
+- Do not pick an `anthropic/...` model without telling the user that using a Claude subscription login in third-party tools may violate Anthropic's terms.
+- The settings file `~/.config/orca-omp/config.env` is personal. Never commit it or copy it into the repo.
+
+### Step 1: Check prerequisites
+```bash
+for c in claude orca omp git python3 curl; do command -v "$c" >/dev/null && echo "ok $c" || echo "MISSING $c"; done
+```
+If anything is `MISSING`, stop and tell the user what to install:
+- `orca`: Orca.app from https://github.com/stablyai/orca (the `orca` CLI comes with it)
+- `omp`: https://github.com/can1357/oh-my-pi
+- `claude`: https://claude.com/claude-code
+
+### Step 2: Get the repo
+```bash
+REPO="$HOME/Developer/claude-orca-omp-skills"   # ask the user if they prefer another location
+if [ -d "$REPO/.git" ]; then git -C "$REPO" pull --ff-only; else git clone https://github.com/Jack-R-Hong/claude-orca-omp-skills.git "$REPO"; fi
+```
+
+### Step 3: Install the skills
+```bash
+"$REPO/install.sh"
+```
+It symlinks each `skills/*` folder into `~/.claude/skills/` (override with `CLAUDE_SKILLS_DIR`). It never overwrites an existing folder that is not a symlink; it prints `skip <name>` instead. If you see a skip, show it to the user and ask before moving the existing folder.
+
+### Step 4: Configure worker models
+```bash
+C="$HOME/.claude/skills/orca-omp-setup/scripts/config.sh"
+bash "$C" show      # current values; models are unset on a fresh install
+bash "$C" models    # omp models, each marked local or remote
+```
+Ask the user (one question per setting):
+1. `ORCA_OMP_MODEL`: the model for general coding tasks. Any listed model.
+2. `ORCA_OMP_LOCAL_MODEL`: the model for sensitive tasks. Offer only models marked `local`. If none exist, tell the user and leave it unset; sensitive tasks will then not be dispatched.
+
+Save each answer, and show the user any error `set` prints:
+```bash
+bash "$C" set ORCA_OMP_MODEL "<provider/model>"
+bash "$C" set ORCA_OMP_LOCAL_MODEL "<provider/model>"
+```
+`set` validates the value: the model must be listed by omp, and the local model must be served on localhost. Keep the defaults for `ORCA_OMP_KEEP_WORKERS`, `ORCA_OMP_WAIT_MINUTES`, and `ORCA_OMP_MAX_LOCAL_WORKERS` unless the user asks to change them. If `omp models` lists nothing usable, the user must first add a provider to omp; stop and tell them.
+
+### Step 5: Verify
+```bash
+bash "$HOME/.claude/skills/orca-omp-doctor/scripts/doctor.sh"
+```
+- `Result: 0 failed` means the install worked. The warning `not inside an Orca terminal` is expected when you are not running inside Orca.
+- For each `FAIL`, report it to the user with the `→` hint the script prints. If `Orca runtime` fails, ask the user before running `orca open`.
+- Optional, only if the user agrees (sends a short prompt to each model, up to 2 minutes each): `doctor.sh --live`.
+
+### Step 6: Report to the user
+Tell the user:
+1. Which skills were linked, and any that were skipped.
+2. The saved models (`bash "$C" show`).
+3. The doctor result.
+4. How to use it: start Claude Code inside an Orca terminal (see the section "從 Orca 裡啟動 Claude Code 當編排者" in this README), then `/orca-omp <task>`. If the new skills do not appear in the current Claude Code session, start a new session.
+
+### Uninstall
+```bash
+for s in orca-omp orca-omp-doctor orca-omp-setup; do [ -L "$HOME/.claude/skills/$s" ] && rm "$HOME/.claude/skills/$s"; done
+rm -r "$HOME/.config/orca-omp"    # personal settings; ask the user first
+```
 
 ## License
 
