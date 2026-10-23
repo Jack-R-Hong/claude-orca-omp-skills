@@ -43,13 +43,64 @@ export ORCA_OMP_KEEP_WORKERS=1                                 # 任務完成後
 
 未設定時使用上面的預設值（作者自己的環境），請改成你的模型。
 
+把 `export` 寫進 `~/.zshrc`（或你的 shell 設定檔）。Orca 的終端機會啟動 login shell，這樣才讀得到。
+
+## 從 Orca 裡啟動 Claude Code 當編排者
+
+Claude Code 必須在 **Orca 的終端機裡**執行，Opus 的編排過程才會和所有 worker 顯示在同一個 Orca 視窗。Orca 會在自己的終端機裡設定 `ORCA_TERMINAL_HANDLE`，skill 靠它辨識 coordinator。
+
+### 1. 把專案加進 Orca
+
+```bash
+orca open                                   # 啟動 Orca（已開啟可略過）
+orca repo add --path ~/Developer/<repo>     # 註冊專案（只需一次）
+```
+
+### 2. 啟動 Claude Code
+
+擇一：
+
+**A. 用 CLI 啟動（建議）**
+
+```bash
+orca agent launch --agent claude --worktree path:$HOME/Developer/<repo> \
+  --surface terminal --model opus --focus
+```
+
+`--surface terminal` 讓 Claude Code 以終端機形式執行（不是 Orca 的 chat 介面），確保有 `ORCA_TERMINAL_HANDLE`。
+
+**B. 在 Orca 介面裡**
+
+在側邊欄選擇專案，開一個新的終端機分頁，輸入 `claude`。
+
+**C. 接續既有的 Claude Code 對話**
+
+在 Orca 的終端機分頁裡切到原本啟動那段對話的目錄，執行：
+
+```bash
+claude --resume <session-id>
+```
+
+接續後，請關掉原本在 Orca 外面的那個 Claude Code，避免兩邊同時操作同一段對話。
+
+### 3. 確認並開始
+
+在 Orca 裡的 Claude Code 中：
+
+1. `/orca-omp-doctor`：`running inside an Orca terminal` 應該是 PASS。
+2. `/orca-omp <任務描述>`
+
+### 在 Orca 裡會看到什麼
+
+- **主專案底下**：Claude Code（Opus）的編排對話。
+- **每個子 worktree 底下**（側邊欄）：一個 omp worker 的終端機，即時顯示它在做什麼。
+- `ORCA_OMP_KEEP_WORKERS=1`（預設）時，任務完成後 worker 終端機會保留，可以在那裡輸入 `/dump` 查看 omp 送給模型的完整 context。
+
 ## 使用
 
 1. 檢查設定：`/orca-omp-doctor`（實測模型加上「用 --live」）。
-2. 在 **Orca 的終端機裡**啟動 Claude Code，編排過程和所有 worker 才會顯示在同一個視窗。
+2. 依上一節在 Orca 的終端機裡啟動 Claude Code。
 3. `/orca-omp <任務描述>`
-
-每個 worker 的 omp 終端機會出現在 Orca 側邊欄中它自己的子 worktree 底下。`ORCA_OMP_KEEP_WORKERS=1`（預設）時，任務完成後終端機會保留，可以在那裡輸入 `/dump` 查看 omp 送給模型的完整 context。
 
 不在 Orca 終端機裡也能跑：skill 會自己建立一個 coordinator 終端機當身份，但 Opus 的對話不會顯示在 Orca 中。
 
