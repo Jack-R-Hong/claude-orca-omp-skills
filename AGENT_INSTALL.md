@@ -48,7 +48,7 @@ Save each answer, and show the user any error `set` prints:
 bash "$C" set ORCA_OMP_MODEL "<provider/model>"
 bash "$C" set ORCA_OMP_LOCAL_MODEL "<provider/model>"
 ```
-`set` validates the value: the model must be listed by omp, and the local model must be served on localhost. Keep the defaults for `ORCA_OMP_KEEP_WORKERS`, `ORCA_OMP_WAIT_MINUTES`, and `ORCA_OMP_MAX_LOCAL_WORKERS` unless the user asks to change them. If `omp models` lists nothing usable, the user must first add a provider to omp; stop and tell them.
+`set` validates the value: the model must be listed by omp, and the local model must be served on localhost. Keep the defaults for `ORCA_OMP_KEEP_WORKERS`, `ORCA_OMP_WAIT_MINUTES`, `ORCA_OMP_MAX_WORKERS`, and `ORCA_OMP_MAX_LOCAL_WORKERS` unless the user asks to change them; `bash "$C" machine` prints CPU and memory to help size the worker limits. If `omp models` lists nothing usable, the user must first add a provider to omp; stop and tell them.
 
 ## Step 5: Verify
 ```bash

@@ -57,7 +57,8 @@ bash $C set ORCA_OMP_MODEL <provider/model>           # 寫入前會先驗證
 | `ORCA_OMP_LOCAL_MODEL` | 無 | 機密任務用的 omp 模型，必須在 localhost |
 | `ORCA_OMP_KEEP_WORKERS` | `1` | 任務完成後保留 Orca 裡的 worker 終端機（`0` 為關閉） |
 | `ORCA_OMP_WAIT_MINUTES` | `15` | 每次等待 worker 的分鐘數，1–50 |
-| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | 同時執行的本機模型 worker 上限 |
+| `ORCA_OMP_MAX_WORKERS` | `4` | 同時執行的 worker 總數上限（含本機），依機器效能調整 |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | 同時執行的本機模型 worker 上限（計入總數） |
 
 同名的環境變數會覆蓋設定檔。設定檔只會被當成 `KEY=VALUE` 文字解析，不會被執行。
 

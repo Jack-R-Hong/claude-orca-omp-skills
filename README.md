@@ -57,7 +57,8 @@ bash $C set ORCA_OMP_MODEL <provider/model>           # validated before writing
 | `ORCA_OMP_LOCAL_MODEL` | none | omp model for sensitive tasks; must be served on localhost |
 | `ORCA_OMP_KEEP_WORKERS` | `1` | keep finished worker terminals open in Orca (`0` closes them) |
 | `ORCA_OMP_WAIT_MINUTES` | `15` | length of each wait for workers, 1–50 |
-| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | max local-model workers at once |
+| `ORCA_OMP_MAX_WORKERS` | `4` | max workers at once, all routes combined; size it to your machine |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `2` | max local-model workers at once (counts toward the total) |
 
 An environment variable with the same name overrides the file. The file is parsed as plain `KEY=VALUE` lines and never executed.
 

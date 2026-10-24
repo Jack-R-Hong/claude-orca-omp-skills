@@ -8,6 +8,7 @@
 #   config.sh set KEY VALUE        validate and write a value
 #   config.sh unset KEY            remove a value from the file
 #   config.sh models               list omp models as selector<TAB>local|remote
+#   config.sh machine              print cpus=N and mem_gb=N to help size the worker limits
 #   config.sh base-url PROVIDER    print a provider's baseUrl from omp's models.yml
 #
 # The file is parsed as plain KEY=VALUE lines and never sourced, so it cannot run code.
@@ -16,12 +17,13 @@ set -u
 
 CONFIG="${ORCA_OMP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/orca-omp/config.env}"
 OMP_MODELS_YML="${OMP_MODELS_YML:-$HOME/.omp/agent/models.yml}"
-KEYS=(ORCA_OMP_MODEL ORCA_OMP_LOCAL_MODEL ORCA_OMP_KEEP_WORKERS ORCA_OMP_WAIT_MINUTES ORCA_OMP_MAX_LOCAL_WORKERS)
+KEYS=(ORCA_OMP_MODEL ORCA_OMP_LOCAL_MODEL ORCA_OMP_KEEP_WORKERS ORCA_OMP_WAIT_MINUTES ORCA_OMP_MAX_WORKERS ORCA_OMP_MAX_LOCAL_WORKERS)
 
 default_for() {
   case "$1" in
     ORCA_OMP_KEEP_WORKERS) echo 1 ;;
     ORCA_OMP_WAIT_MINUTES) echo 15 ;;
+    ORCA_OMP_MAX_WORKERS) echo 4 ;;
     ORCA_OMP_MAX_LOCAL_WORKERS) echo 2 ;;
     *) echo "" ;; # models have no default; run the setup skill
   esac
@@ -97,7 +99,7 @@ validate() {
   case "$k" in
     ORCA_OMP_KEEP_WORKERS) [[ "$v" == 0 || "$v" == 1 ]] || die "$k must be 0 or 1" ;;
     ORCA_OMP_WAIT_MINUTES) [[ "$v" =~ ^[0-9]+$ && "$v" -ge 1 && "$v" -le 50 ]] || die "$k must be 1-50 (stay inside the 1-hour prompt cache TTL)" ;;
-    ORCA_OMP_MAX_LOCAL_WORKERS) [[ "$v" =~ ^[0-9]+$ && "$v" -ge 1 ]] || die "$k must be a positive integer" ;;
+    ORCA_OMP_MAX_WORKERS | ORCA_OMP_MAX_LOCAL_WORKERS) [[ "$v" =~ ^[0-9]+$ && "$v" -ge 1 ]] || die "$k must be a positive integer" ;;
     ORCA_OMP_MODEL | ORCA_OMP_LOCAL_MODEL)
       [[ "$v" == */* ]] || die "$k must be an omp provider/model selector"
       listed="$(list_models | awk -F'\t' -v s="$v" '$1 == s { print $2 }')"
@@ -144,6 +146,10 @@ case "$cmd" in
     validate "$2" "$3"
     write_value "$2" "$3"
     [[ -n "${!2:-}" ]] && echo "note: environment variable $2 is set and overrides the file" >&2
+    max="$(resolve ORCA_OMP_MAX_WORKERS | cut -f1)"
+    max_local="$(resolve ORCA_OMP_MAX_LOCAL_WORKERS | cut -f1)"
+    [[ "$max_local" -gt "$max" ]] &&
+      echo "note: ORCA_OMP_MAX_LOCAL_WORKERS ($max_local) exceeds ORCA_OMP_MAX_WORKERS ($max); the total limit wins" >&2
     echo "$2=$3"
     ;;
   unset)
@@ -152,6 +158,17 @@ case "$cmd" in
     write_value "$2"
     ;;
   models) list_models ;;
+  machine)
+    if [[ "$(uname)" == Darwin ]]; then
+      cpus="$(sysctl -n hw.ncpu)"
+      mem_bytes="$(sysctl -n hw.memsize)"
+    else
+      cpus="$(nproc)"
+      mem_bytes="$(awk '/^MemTotal:/ { print $2 * 1024 }' /proc/meminfo)"
+    fi
+    echo "cpus=$cpus"
+    echo "mem_gb=$((mem_bytes / 1024 / 1024 / 1024))"
+    ;;
   base-url)
     [[ $# -eq 2 ]] || die "usage: config.sh base-url PROVIDER"
     base_url "$2"

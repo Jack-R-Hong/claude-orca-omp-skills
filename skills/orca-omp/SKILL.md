@@ -22,7 +22,8 @@ bash ~/.claude/skills/orca-omp-setup/scripts/config.sh show
 | `ORCA_OMP_LOCAL_MODEL` | `<LOCAL_MODEL>` | omp selector for sensitive tasks, served on this machine |
 | `ORCA_OMP_KEEP_WORKERS` | `<KEEP>` | `1`: keep settled worker terminals open in Orca (`worker-retain`) so the user can inspect omp's context. `0`: release them. |
 | `ORCA_OMP_WAIT_MINUTES` | `<WAIT>` | length of each `check --wait` |
-| `ORCA_OMP_MAX_LOCAL_WORKERS` | `<MAX_LOCAL>` | max local-model workers at once |
+| `ORCA_OMP_MAX_WORKERS` | `<MAX>` | max workers running at once, all routes combined |
+| `ORCA_OMP_MAX_LOCAL_WORKERS` | `<MAX_LOCAL>` | max local-model workers at once; they count toward `<MAX>` |
 
 If `ORCA_OMP_MODEL` is unset, stop and run `/orca-omp-setup`. If only `ORCA_OMP_LOCAL_MODEL` is unset, continue but do not dispatch sensitive tasks; tell the user which tasks were held back.
 
@@ -54,7 +55,7 @@ Pick a route per task by sensitivity, and state which route was used in the repo
 | General (default) | `<MODEL>` | Ordinary coding tasks. |
 | Local | `<LOCAL_MODEL>` | Data must not leave this machine: tasks touching `.env`, keys, credentials, `~/.ssh`, personal data, unreleased code or customer data, or reading/writing local system settings or keychain scripts. |
 
-- The local model shares this machine's memory and GPU with Orca and Claude Code. Run at most `<MAX_LOCAL>` local workers at a time.
+- The local model shares this machine's memory and GPU with Orca and Claude Code. Run at most `<MAX_LOCAL>` local workers at a time, and never more than `<MAX>` workers in total.
 - When unsure whether a task is sensitive, use the local route.
 - The local route only keeps data on the machine. It does not make actions safer: the worker can still run commands here. Sensitive specs must list the allowed commands and files, forbid deletions, `git push`, and outbound network requests, and forbid putting secrets in the `worker_done` summary or logs.
 - Verify sensitive tasks by reviewing the diff locally. Do not paste secrets anywhere except back to the user.
@@ -62,11 +63,12 @@ Pick a route per task by sensitivity, and state which route was used in the repo
 ## 3. Dispatch
 ```bash
 orca orchestration run-create --objective "<overall goal>" --json
-# Start all independent tasks at once, each in its own child worktree
+# Start independent tasks, up to <MAX> at once, each in its own child worktree
 orca orchestration worker-start --spec "<spec>" --task-title "<short title>" \
   --worktree new-child --agent omp \
   --model <MODEL or LOCAL_MODEL> --json
 ```
+- Never have more than `<MAX>` workers running (`<MAX_LOCAL>` of them local). Queue the rest and start the next one each time a `worker_done` is settled (retained or released). A retained terminal is idle and does not count.
 - Each worker runs in its own child worktree, so in Orca its terminal sits under that worktree in the sidebar, not under the coordinator's repo. After starting the first worker, bring it to the front with `orca terminal switch --terminal <worker handle>` (the `terminal` effect in the `worker-start` result) and tell the user which worktree each worker is in.
 - For ordered work, use `task-create --deps` + `worker-start --task <id>`; keep dependency chains at most 3 deep.
 - OMP does not support `--effort`; do not pass it.
